@@ -1,0 +1,72 @@
+# Команди curl для перевірки проксі-сервера
+# Сервер запущено: npm run dev -- -h 127.0.0.1 -p 3000 -c ./cache
+# Команди виконуються з кореня репозиторію.
+
+# ---------- Підготовка ----------
+rm -f cache/*.jpg
+curl -s https://http.cat/418 -o /tmp/my.jpg
+curl -s https://http.cat/301 -o /tmp/my2.jpg
+
+# ---------- GET ----------
+# 1) Картинки немає в кеші: береться з http.cat, заголовок X-Cache: MISS
+curl -s -D - -o /tmp/cat404.jpg http://127.0.0.1:3000/404
+ls cache
+file /tmp/cat404.jpg
+
+# 2) Повторний запит: береться з кешу, заголовок X-Cache: HIT
+curl -s -D - -o /dev/null http://127.0.0.1:3000/404
+
+# 3) Код, якого немає на http.cat: відповідь 404, у кеш нічого не зберігається
+curl -s -i http://127.0.0.1:3000/999
+ls cache
+
+# 4) Некоректний шлях: відповідь 404
+curl -s -i http://127.0.0.1:3000/abc
+
+# 5) Порівняння часу відповіді: з http.cat і з кешу
+rm -f cache/200.jpg
+curl -s -o /dev/null -w "перший (http.cat): %{time_total} с\n" http://127.0.0.1:3000/200
+curl -s -o /dev/null -w "повторний (кеш):   %{time_total} с\n" http://127.0.0.1:3000/200
+
+# ---------- PUT ----------
+# 6) Запис власної картинки в кеш: відповідь 201
+curl -s -i -X PUT --data-binary @/tmp/my.jpg http://127.0.0.1:3000/200
+
+# 7) GET після PUT повертає мою картинку (X-Cache: HIT), а не з http.cat
+curl -s -D - -o /tmp/got.jpg http://127.0.0.1:3000/200
+cmp /tmp/my.jpg /tmp/got.jpg && echo "ЗБІГАЄТЬСЯ: це моя картинка"
+
+# 8) PUT замінює наявну картинку: відповідь 201
+curl -s -o /dev/null -w "PUT: %{http_code}\n" -X PUT --data-binary @/tmp/my2.jpg http://127.0.0.1:3000/200
+curl -s -o /tmp/got2.jpg http://127.0.0.1:3000/200
+cmp /tmp/my2.jpg /tmp/got2.jpg && echo "ЗБІГАЄТЬСЯ: картинку замінено"
+
+# 9) PUT з порожнім тілом: відповідь 400
+curl -s -i -X PUT http://127.0.0.1:3000/200
+
+# 10) PUT на некоректний шлях: відповідь 404
+curl -s -i -X PUT --data-binary @/tmp/my.jpg http://127.0.0.1:3000/abc
+
+# ---------- DELETE ----------
+# 11) Видалення картинки з кешу: відповідь 200
+curl -s -i -X DELETE http://127.0.0.1:3000/200
+ls cache
+
+# 12) Повторне видалення (картинки вже немає): відповідь 404
+curl -s -i -X DELETE http://127.0.0.1:3000/200
+
+# 13) GET після DELETE знову бере картинку з http.cat (X-Cache: MISS)
+curl -s -D - -o /dev/null http://127.0.0.1:3000/200
+
+# 14) DELETE на некоректний шлях: відповідь 404
+curl -s -i -X DELETE http://127.0.0.1:3000/abc
+
+# ---------- Недозволені методи: відповідь 405 із заголовком Allow ----------
+# 15) POST
+curl -s -i -X POST http://127.0.0.1:3000/200
+
+# 16) PATCH
+curl -s -i -X PATCH http://127.0.0.1:3000/200
+
+# 17) HEAD
+curl -s -I http://127.0.0.1:3000/200
