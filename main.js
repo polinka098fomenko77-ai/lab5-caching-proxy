@@ -3,6 +3,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { once } from 'node:events';
 import { Command } from 'commander';
+import superagent from 'superagent';
 
 // ---------- Параметри командного рядка ----------
 const program = new Command();
@@ -36,10 +37,71 @@ async function prepareCacheDir() {
 
 await prepareCacheDir();
 
-// ---------- Відповідь з повідомленням ----------
+// ---------- Допоміжні функції ----------
+
+// Відповідь з текстовим повідомленням
 function sendMessage(res, status, message, headers = {}) {
   res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8', ...headers });
   res.end(message);
+}
+
+// Код стану зі шляху: приймаємо лише /ТРИ_ЦИФРИ, інакше null
+function parseCode(req) {
+  const pathname = req.url.split('?')[0];
+  const match = /^\/(\d{3})$/.exec(pathname);
+  return match ? match[1] : null;
+}
+
+// Шлях до файлу кешу для коду
+function cachePath(code) {
+  return path.join(cacheDir, `${code}.jpg`);
+}
+
+// Картинка з http.cat: Buffer або null, якщо отримати не вдалося
+async function fetchFromCat(code) {
+  try {
+    const response = await superagent
+      .get(`https://http.cat/${code}`)
+      .buffer(true)
+      .parse(superagent.parse.image)
+      .timeout({ response: 5000, deadline: 15000 });
+
+    if (Buffer.isBuffer(response.body) && response.body.length > 0) {
+      return response.body;
+    }
+    return null;
+  } catch (error) {
+    console.error(`Запит до http.cat для ${code} завершився помилкою: ${error.message}`);
+    return null;
+  }
+}
+
+// ---------- Метод GET ----------
+async function handleGet(code, res) {
+  const filePath = cachePath(code);
+  let image;
+  let source;
+
+  try {
+    image = await fs.readFile(filePath);
+    source = 'HIT';
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      throw error;
+    }
+
+    image = await fetchFromCat(code);
+    if (image === null) {
+      sendMessage(res, 404, `Картинку для коду ${code} не знайдено`);
+      return;
+    }
+
+    await fs.writeFile(filePath, image);
+    source = 'MISS';
+  }
+
+  res.writeHead(200, { 'Content-Type': 'image/jpeg', 'X-Cache': source });
+  res.end(image);
 }
 
 // ---------- Обробник запитів ----------
@@ -48,6 +110,17 @@ const ALLOWED_METHODS = ['GET', 'PUT', 'DELETE'];
 async function handleRequest(req, res) {
   if (!ALLOWED_METHODS.includes(req.method)) {
     sendMessage(res, 405, `Метод ${req.method} не дозволено`, { Allow: ALLOWED_METHODS.join(', ') });
+    return;
+  }
+
+  const code = parseCode(req);
+  if (code === null) {
+    sendMessage(res, 404, 'Некоректний шлях: очікується /<код стану HTTP>, наприклад /200');
+    return;
+  }
+
+  if (req.method === 'GET') {
+    await handleGet(code, res);
     return;
   }
 
