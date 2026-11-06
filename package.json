@@ -1,0 +1,22 @@
+{
+  "name": "lab5-caching-proxy",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "start": "node main.js",
+    "dev": "node --watch main.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/polinka098fomenko77-ai/lab5-caching-proxy.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/polinka098fomenko77-ai/lab5-caching-proxy/issues"
+  },
+  "homepage": "https://github.com/polinka098fomenko77-ai/lab5-caching-proxy#readme"
+}
