@@ -126,6 +126,21 @@ async function handlePut(code, req, res) {
   sendMessage(res, 201, `Картинку для коду ${code} збережено в кеш`);
 }
 
+// ---------- Метод DELETE ----------
+async function handleDelete(code, res) {
+  try {
+    await fs.unlink(cachePath(code));
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      sendMessage(res, 404, `Картинки для коду ${code} немає в кеші`);
+      return;
+    }
+    throw error;
+  }
+
+  sendMessage(res, 200, `Картинку для коду ${code} видалено з кешу`);
+}
+
 // ---------- Обробник запитів ----------
 const ALLOWED_METHODS = ['GET', 'PUT', 'DELETE'];
 
@@ -151,7 +166,7 @@ async function handleRequest(req, res) {
     return;
   }
 
-  sendMessage(res, 501, `Метод ${req.method} ще не реалізовано`);
+  await handleDelete(code, res);
 }
 
 // ---------- Запуск сервера ----------
