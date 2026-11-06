@@ -57,6 +57,15 @@ function cachePath(code) {
   return path.join(cacheDir, `${code}.jpg`);
 }
 
+// Тіло запиту цілком (потік шматків склеюємо в один Buffer)
+async function readBody(req) {
+  const chunks = [];
+  for await (const chunk of req) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
 // Картинка з http.cat: Buffer або null, якщо отримати не вдалося
 async function fetchFromCat(code) {
   try {
@@ -104,6 +113,19 @@ async function handleGet(code, res) {
   res.end(image);
 }
 
+// ---------- Метод PUT ----------
+async function handlePut(code, req, res) {
+  const body = await readBody(req);
+
+  if (body.length === 0) {
+    sendMessage(res, 400, 'Тіло запиту порожнє: потрібно передати картинку');
+    return;
+  }
+
+  await fs.writeFile(cachePath(code), body);
+  sendMessage(res, 201, `Картинку для коду ${code} збережено в кеш`);
+}
+
 // ---------- Обробник запитів ----------
 const ALLOWED_METHODS = ['GET', 'PUT', 'DELETE'];
 
@@ -121,6 +143,11 @@ async function handleRequest(req, res) {
 
   if (req.method === 'GET') {
     await handleGet(code, res);
+    return;
+  }
+
+  if (req.method === 'PUT') {
+    await handlePut(code, req, res);
     return;
   }
 
